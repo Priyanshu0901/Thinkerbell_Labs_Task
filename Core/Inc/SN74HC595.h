@@ -12,6 +12,8 @@
 
 typedef struct{
   //gpio_num_t oe_pin;
+//	  GPIO_TypeDef * port;
+//	  uint16_t pin;
 //  gpio_num_t rclk_pin;
 //  gpio_num_t ser_data_pin;
 //  gpio_num_t ser_clk_pin;

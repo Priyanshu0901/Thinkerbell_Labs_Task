@@ -6,7 +6,7 @@
 #define TRIPLE_WINDOW     (700)
 #define LONG_PRESS_TIME   (1500)
 
-static char *const tag = "Button";
+//static char *const tag = "Button";
 
 void Button_ctor(Button_t *const me, BTN_id_e id, GPIO_TypeDef *port,
 		uint16_t pin, osMessageQueueId_t queue_handler) {
@@ -56,7 +56,7 @@ void Button_read(Button_t *const me) {
 		}
 	}
 
-	// --- STATE DESCISION ---
+	// --- STATE DECISION ---
 
 	// Check for Long Press (While held down)
 	if (me->last_state == GPIO_PIN_RESET && !me->is_long_press_sent) {
@@ -75,24 +75,24 @@ void Button_read(Button_t *const me) {
 		BTN_event_t event = {.id = me->id,.timestamp = now};
 		bool to_send = false;
 
-		// 1. Triple Press (Immediate trigger on 3rd release)
+		// Triple Press (Immediate trigger on 3rd release)
 		if (me->click_count == 3) {
 //			log_message(tag, LOG_INFO, "Triple Press on BTN %d", me->id);
 			event.type = TRIPLE_PRESS;
 			to_send = true;
 			me->click_count = 0;
 		}
-		// 2. Double Press (Trigger if 2 clicks exist and window for 3rd has closed)
+		// Double Press (Trigger if 2 clicks exist and window for 3rd has closed)
 		else if (me->click_count == 2
-				&& (total_time > TRIPLE_WINDOW || idle_time > 200)) {
+				&& (total_time > TRIPLE_WINDOW || idle_time > (DOUBLE_WINDOW - SINGLE_WINDOW))) {
 //			log_message(tag, LOG_INFO, "Double Press on BTN %d", me->id);
 			event.type = DOUBLE_PRESS;
 			to_send = true;
 			me->click_count = 0;
 		}
-		// 3. Single Press (Trigger if 1 click exists and window for 2nd has closed)
+		// Single Press (Trigger if 1 click exists and window for 2nd has closed)
 		else if (me->click_count == 1
-				&& (total_time > DOUBLE_WINDOW || idle_time > 300)) {
+				&& (total_time > DOUBLE_WINDOW || idle_time > SINGLE_WINDOW)) {
 //			log_message(tag, LOG_INFO, "Single Press on BTN %d", me->id);
 			event.type = SINGLE_PRESS;
 			to_send = true;
