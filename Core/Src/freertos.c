@@ -25,6 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "Display.h"
 #include "Button.h"
 #include "Menu.h"
 /* USER CODE END Includes */
@@ -43,6 +44,8 @@
 /* USER CODE BEGIN PM */
 static Button_t Buttons[TOTAL_BTNS];
 static Menu_t Menu;
+static SN74HC595_t ShiftRegister;
+static Display_Manager_t DisplayManager;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -234,30 +237,48 @@ void DisplayManagerTask(void *argument)
 {
   /* USER CODE BEGIN DisplayManagerTask */
 	osStatus_t status;
-	Display_update_data_t display_data;
+		Display_update_data_t display_data;
 
-	log_message("DisplayMgr", LOG_INFO, "Display Manager Task started");
+		// Initialize Shift Register
+		// Pin mappings from main.h:
+		// - SR_DATA: PA6
+		// - SR_CLK: PA7
+		// - RCLK: PB0
+		// - SR_CLR: PB1
+		// - OE: TIM2_CH1 (PWM)
+		SN74HC595_ctor(&ShiftRegister,
+		               SR_DATA_GPIO_Port, SR_DATA_Pin,      // Serial Data
+		               SR_CLK_GPIO_Port, SR_CLK_Pin,        // Serial Clock
+		               RCLK_GPIO_Port, RCLK_Pin,            // Register Clock (Latch)
+		               SR_CLR_GPIO_Port, SR_CLR_Pin,        // Clear
+		               &htim2, TIM_CHANNEL_1);              // PWM for OE (brightness)
 
-	/* Infinite loop */
-	for (;;) {
-		// Wait for display update requests from Menu
-		status = osMessageQueueGet(display_pattern_queueHandle, (void*) &display_data, 0, osWaitForever);
+		// Initialize Display Manager
+		Display_ctor(&DisplayManager,
+		             &ShiftRegister,
+		             display_pattern_queueHandle,
+		             shiftreg_mutexHandle);
 
-		if (status == osOK) {
-			// TODO: Implement actual display update using shift register
-			// This is where you would:
-			// 1. Acquire shiftreg_mutex
-			// 2. Send the 16-bit pattern to the shift register
-			// 3. Set the brightness via PWM on OE pin
-			// 4. Release shiftreg_mutex
+		log_message("DisplayMgr", LOG_INFO, "Display Manager Task started");
 
-			log_message("DisplayMgr", LOG_INFO, "Display update: Pattern=0x%04X, Brightness=%d",
-			            display_data.data, display_data.brightness);
+		/* Infinite loop */
+		for (;;) {
+			// Wait for display update requests from Menu
+			status = osMessageQueueGet(display_pattern_queueHandle,
+			                           (void*) &display_data,
+			                           0,
+			                           osWaitForever);
 
-			// Placeholder: Toggle LED to show activity
-			HAL_GPIO_TogglePin(U_LED_GPIO_Port, U_LED_Pin);
+			if (status == osOK) {
+				// Process the display update
+				if (Display_update(&DisplayManager, &display_data)) {
+					// Visual feedback on user LED
+					HAL_GPIO_TogglePin(U_LED_GPIO_Port, U_LED_Pin);
+				} else {
+					log_message("DisplayMgr", LOG_ERROR, "Display update failed");
+				}
+			}
 		}
-	}
   /* USER CODE END DisplayManagerTask */
 }
 
