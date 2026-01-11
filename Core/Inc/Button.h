@@ -9,6 +9,7 @@
 #define BUTTON_H_
 
 #include "main.h"
+#include "cmsis_os.h"
 
 typedef enum {
   BTN_1 = 0,
@@ -42,13 +43,16 @@ typedef struct {
   uint32_t last_time;       // Timestamp of the last state change (for debounce/hold)
   
   // Multi-press Tracking
-  int click_count;          // How many clicks recorded so far (0, 1, 2, 3)
+  int click_count;          // How many clicks recorded so far
   uint32_t first_click_time;// When the very first click in a sequence started
   bool is_long_press_sent;  // Flag to prevent sending multiple Long Press events while holding
-  bool waiting_for_release; // Internal flag to track if we are mid-press
+
+  GPIO_PinState last_raw_state; // The actual pin level last read
+  uint32_t debounce_time;      // The last time the pin physically moved
+  osMessageQueueId_t queue_handler;
 }Button_t;
 
-void Button_ctor(Button_t * const me, BTN_id_e id, GPIO_TypeDef * port, uint16_t pin);
+void Button_ctor(Button_t * const me, BTN_id_e id, GPIO_TypeDef * port, uint16_t pin,osMessageQueueId_t queue_handler);
 void Button_read(Button_t * const me);
 
 #endif /* BUTTON_H_ */

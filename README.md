@@ -1,7 +1,6 @@
-# AI Snake - Embedded Snake Game with Hamiltonian Cycle AI
+# ThinkerBell Labs Task
 
-[![STM32](https://img.shields.io/badge/STM32-F411RE-blue)](https://www.st.com/en/microcontrollers-microprocessors/stm32f411re.html)
-[![Display](https://img.shields.io/badge/Display-WS2812B-green)](https://www.adafruit.com/category/168)
+[![STM32](https://img.shields.io/badge/STM32-F411CE-blue)](https://www.st.com/en/microcontrollers-microprocessors/stm32f411ce.html)
 [![IDE](https://img.shields.io/badge/IDE-STM32CubeIDE-orange)](https://www.st.com/en/development-tools/stm32cubeide.html)
 [![Language](https://img.shields.io/badge/Language-C-blue)](https://en.wikipedia.org/wiki/C_(programming_language))
 
