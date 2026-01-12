@@ -39,7 +39,6 @@ This project implements a complete embedded user interface system controlled ent
 | PB0   | RCLK           | Shift register latch clock     |
 | PB1   | SR_CLR         | Shift register clear (active-low)|
 | PA5   | OE_PIN         | Output enable (PWM/TIM2_CH1)   |
-| PC13  | U_LED          | User status LED                |
 | PA2   | USART2_TX      | Debug UART transmit            |
 
 ## System Architecture
@@ -76,8 +75,8 @@ ButtonInput --[button_event_queue]--> MenuLogic --[display_pattern_queue]--> Dis
 ```
 
 **Queues:**
-- button_event_queue: 16 elements of 12 bytes (button events)
-- display_pattern_queue: 16 elements of 4 bytes (display updates)
+- button_event_queue: 16 elements of 12 bytes (BTN_event_t)
+- display_pattern_queue: 16 elements of 4 bytes (Display_update_data_t)
 
 **Mutexes:**
 - shiftreg_mutex: Protects shift register hardware access
