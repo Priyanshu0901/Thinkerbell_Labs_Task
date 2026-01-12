@@ -2,16 +2,7 @@
  * Display.c
  *
  *  Created on: 12-Jan-2026
- *      Author: rayv_mini_pc
- */
-
-/*
- * Display.c
- *
- *  Created on: 11-Jan-2026
  *      Author: Priyanshu Roy
- *
- *  Description: Display manager implementation
  */
 
 #include "Display.h"
@@ -23,10 +14,8 @@
 
 static char *const tag = "Display";
 
-void Display_ctor(Display_Manager_t * const me,
-                  SN74HC595_t *shift_reg,
-                  osMessageQueueId_t queue,
-                  osMutexId_t mutex) {
+void Display_ctor(Display_Manager_t *const me, SN74HC595_t *shift_reg,
+		osMessageQueueId_t queue, osMutexId_t mutex) {
 
 	// Store references
 	me->shift_register = shift_reg;
@@ -41,7 +30,8 @@ void Display_ctor(Display_Manager_t * const me,
 	log_message(tag, LOG_INFO, "Display Manager initialized");
 }
 
-bool Display_update(Display_Manager_t * const me, const Display_update_data_t *update) {
+bool Display_update(Display_Manager_t *const me,
+		const Display_update_data_t *update) {
 	if (update == NULL) {
 		log_message(tag, LOG_ERROR, "Update data is NULL");
 		return false;
@@ -50,13 +40,14 @@ bool Display_update(Display_Manager_t * const me, const Display_update_data_t *u
 	// Validate brightness
 	if (update->brightness > MAX_BRIGHTNESS) {
 		log_message(tag, LOG_WARN, "Brightness %d exceeds max %d, clamping",
-		            update->brightness, MAX_BRIGHTNESS);
+				update->brightness, MAX_BRIGHTNESS);
 	}
 
 	// Acquire hardware mutex
 	osStatus_t status = osMutexAcquire(me->hardware_mutex, MUTEX_TIMEOUT_MS);
 	if (status != osOK) {
-		log_message(tag, LOG_ERROR, "Failed to acquire mutex (status: %d)", status);
+		log_message(tag, LOG_ERROR, "Failed to acquire mutex (status: %d)",
+				status);
 		return false;
 	}
 
@@ -70,13 +61,14 @@ bool Display_update(Display_Manager_t * const me, const Display_update_data_t *u
 	// Release mutex
 	osMutexRelease(me->hardware_mutex);
 
-	log_message(tag, LOG_DEBUG, "Display updated: Pattern=0x%04X, Brightness=%d",
-	            update->data, update->brightness);
+	log_message(tag, LOG_DEBUG,
+			"Display updated: Pattern=0x%04X, Brightness=%d", update->data,
+			update->brightness);
 
 	return true;
 }
 
-bool Display_set_pattern(Display_Manager_t * const me, uint16_t pattern) {
+bool Display_set_pattern(Display_Manager_t *const me, uint16_t pattern) {
 	// Acquire hardware mutex
 	osStatus_t status = osMutexAcquire(me->hardware_mutex, MUTEX_TIMEOUT_MS);
 	if (status != osOK) {
@@ -96,7 +88,7 @@ bool Display_set_pattern(Display_Manager_t * const me, uint16_t pattern) {
 	return true;
 }
 
-bool Display_set_brightness(Display_Manager_t * const me, uint8_t brightness) {
+bool Display_set_brightness(Display_Manager_t *const me, uint8_t brightness) {
 	// Validate brightness
 	if (brightness > MAX_BRIGHTNESS) {
 		brightness = MAX_BRIGHTNESS;
@@ -122,7 +114,7 @@ bool Display_set_brightness(Display_Manager_t * const me, uint8_t brightness) {
 	return true;
 }
 
-void Display_disable(Display_Manager_t * const me) {
+void Display_disable(Display_Manager_t *const me) {
 	// Acquire hardware mutex
 	osStatus_t status = osMutexAcquire(me->hardware_mutex, MUTEX_TIMEOUT_MS);
 	if (status != osOK) {
@@ -140,7 +132,7 @@ void Display_disable(Display_Manager_t * const me) {
 	log_message(tag, LOG_INFO, "Display disabled");
 }
 
-void Display_enable(Display_Manager_t * const me) {
+void Display_enable(Display_Manager_t *const me) {
 	// Acquire hardware mutex
 	osStatus_t status = osMutexAcquire(me->hardware_mutex, MUTEX_TIMEOUT_MS);
 	if (status != osOK) {
@@ -155,10 +147,11 @@ void Display_enable(Display_Manager_t * const me) {
 	// Release mutex
 	osMutexRelease(me->hardware_mutex);
 
-	log_message(tag, LOG_INFO, "Display enabled - Brightness: %d", me->current_brightness);
+	log_message(tag, LOG_INFO, "Display enabled - Brightness: %d",
+			me->current_brightness);
 }
 
-void Display_clear(Display_Manager_t * const me) {
+void Display_clear(Display_Manager_t *const me) {
 	// Acquire hardware mutex
 	osStatus_t status = osMutexAcquire(me->hardware_mutex, MUTEX_TIMEOUT_MS);
 	if (status != osOK) {
@@ -176,7 +169,8 @@ void Display_clear(Display_Manager_t * const me) {
 	log_message(tag, LOG_INFO, "Display cleared");
 }
 
-void Display_get_state(Display_Manager_t * const me, uint16_t *pattern, uint8_t *brightness) {
+void Display_get_state(Display_Manager_t *const me, uint16_t *pattern,
+		uint8_t *brightness) {
 	if (pattern != NULL) {
 		*pattern = me->current_pattern;
 	}
@@ -186,6 +180,6 @@ void Display_get_state(Display_Manager_t * const me, uint16_t *pattern, uint8_t 
 	}
 }
 
-bool Display_is_enabled(Display_Manager_t * const me) {
+bool Display_is_enabled(Display_Manager_t *const me) {
 	return me->is_enabled;
 }

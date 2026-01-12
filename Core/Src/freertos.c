@@ -272,8 +272,6 @@ void DisplayManagerTask(void *argument)
 			if (status == osOK) {
 				// Process the display update
 				if (Display_update(&DisplayManager, &display_data)) {
-					// Visual feedback on user LED
-					HAL_GPIO_TogglePin(U_LED_GPIO_Port, U_LED_Pin);
 				} else {
 					log_message("DisplayMgr", LOG_ERROR, "Display update failed");
 				}

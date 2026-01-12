@@ -1,10 +1,8 @@
 /*
  * SN74HC595.c
  *
- *  Created on: Jan-2026
+ *  Created on: 10-Jan-2026
  *      Author: Priyanshu Roy
- *
- *  Description: Driver implementation for SN74HC595 shift register
  */
 
 #include "SN74HC595.h"
@@ -37,12 +35,10 @@ static inline void pulse_latch(GPIO_TypeDef *port, uint16_t pin) {
 	HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
 }
 
-void SN74HC595_ctor(SN74HC595_t * const me,
-                    GPIO_TypeDef *data_port, uint16_t data_pin,
-                    GPIO_TypeDef *clk_port, uint16_t clk_pin,
-                    GPIO_TypeDef *rclk_port, uint16_t rclk_pin,
-                    GPIO_TypeDef *clr_port, uint16_t clr_pin,
-                    TIM_HandleTypeDef *htim, uint32_t tim_channel) {
+void SN74HC595_ctor(SN74HC595_t *const me, GPIO_TypeDef *data_port,
+		uint16_t data_pin, GPIO_TypeDef *clk_port, uint16_t clk_pin,
+		GPIO_TypeDef *rclk_port, uint16_t rclk_pin, GPIO_TypeDef *clr_port,
+		uint16_t clr_pin, TIM_HandleTypeDef *htim, uint32_t tim_channel) {
 
 	// Store pin configurations
 	me->ser_data_port = data_port;
@@ -76,10 +72,11 @@ void SN74HC595_ctor(SN74HC595_t * const me,
 	// Clear the shift register
 	SN74HC595_clear(me);
 
-	log_message(tag, LOG_INFO, "SN74HC595 initialized - Brightness: %d", me->current_brightness);
+	log_message(tag, LOG_INFO, "SN74HC595 initialized - Brightness: %d",
+			me->current_brightness);
 }
 
-void SN74HC595_write(SN74HC595_t * const me, uint16_t data) {
+void SN74HC595_write(SN74HC595_t *const me, uint16_t data) {
 	// Store current data
 	me->current_data = data;
 
@@ -90,7 +87,8 @@ void SN74HC595_write(SN74HC595_t * const me, uint16_t data) {
 
 	for (int i = 15; i >= 0; i--) {
 		// Set data bit
-		GPIO_PinState bit_state = (data & (1 << i)) ? GPIO_PIN_SET : GPIO_PIN_RESET;
+		GPIO_PinState bit_state =
+				(data & (1 << i)) ? GPIO_PIN_SET : GPIO_PIN_RESET;
 		HAL_GPIO_WritePin(me->ser_data_port, me->ser_data_pin, bit_state);
 
 		// Pulse serial clock to shift in the bit
@@ -103,7 +101,7 @@ void SN74HC595_write(SN74HC595_t * const me, uint16_t data) {
 	log_message(tag, LOG_DEBUG, "Wrote data: 0x%04X", data);
 }
 
-void SN74HC595_set_brightness(SN74HC595_t * const me, uint8_t brightness) {
+void SN74HC595_set_brightness(SN74HC595_t *const me, uint8_t brightness) {
 	// Clamp brightness to valid range
 	if (brightness > MAX_BRIGHTNESS) {
 		brightness = MAX_BRIGHTNESS;
@@ -136,20 +134,21 @@ void SN74HC595_set_brightness(SN74HC595_t * const me, uint8_t brightness) {
 	__HAL_TIM_SET_COMPARE(me->htim, me->tim_channel, duty_cycle);
 
 	log_message(tag, LOG_DEBUG, "Brightness set to %d (PWM duty: %lu%%)",
-	            brightness, (duty_cycle * 100) / PWM_PERIOD);
+			brightness, (duty_cycle * 100) / PWM_PERIOD);
 }
 
-void SN74HC595_update(SN74HC595_t * const me, uint16_t data, uint8_t brightness) {
+void SN74HC595_update(SN74HC595_t *const me, uint16_t data, uint8_t brightness) {
 	// Update brightness first (affects display immediately)
 	SN74HC595_set_brightness(me, brightness);
 
 	// Then update data pattern
 	SN74HC595_write(me, data);
 
-	log_message(tag, LOG_DEBUG, "Updated - Data: 0x%04X, Brightness: %d", data, brightness);
+	log_message(tag, LOG_DEBUG, "Updated - Data: 0x%04X, Brightness: %d", data,
+			brightness);
 }
 
-void SN74HC595_clear(SN74HC595_t * const me) {
+void SN74HC595_clear(SN74HC595_t *const me) {
 	// Method 1: Using SRCLR pin (hardware clear)
 	// This is faster but clears internal registers
 	HAL_GPIO_WritePin(me->ser_clr_port, me->ser_clr_pin, GPIO_PIN_RESET);
@@ -166,17 +165,18 @@ void SN74HC595_clear(SN74HC595_t * const me) {
 	log_message(tag, LOG_DEBUG, "Shift register cleared");
 }
 
-void SN74HC595_disable_output(SN74HC595_t * const me) {
+void SN74HC595_disable_output(SN74HC595_t *const me) {
 	// Turn off all LEDs by setting OE to HIGH (100% duty cycle)
 	__HAL_TIM_SET_COMPARE(me->htim, me->tim_channel, PWM_PERIOD);
 
 	log_message(tag, LOG_DEBUG, "Output disabled");
 }
 
-void SN74HC595_enable_output(SN74HC595_t * const me) {
+void SN74HC595_enable_output(SN74HC595_t *const me) {
 	// Restore previous brightness
 	SN74HC595_set_brightness(me, me->current_brightness);
 
-	log_message(tag, LOG_DEBUG, "Output enabled - Brightness: %d", me->current_brightness);
+	log_message(tag, LOG_DEBUG, "Output enabled - Brightness: %d",
+			me->current_brightness);
 }
 
