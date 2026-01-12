@@ -24,7 +24,6 @@ This project implements a complete embedded user interface system controlled ent
 - 3x Push buttons (active-low with external pull-ups)
 - 2x SN74HC595 shift registers (cascaded for 16-bit output)
 - 16x LEDs with current limiting resistors
-- 1x User status LED
 - UART2 for debug logging (115200 baud)
 
 ### Pin Assignments
