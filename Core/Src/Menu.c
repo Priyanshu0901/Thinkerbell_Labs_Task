@@ -46,13 +46,13 @@ static uint16_t MENU_TO_PAGES[TOTAL_PAGES] =
 	0x2000, 	// MODE_SELECT_PAGE,
 	0x4000,		// INFO_PAGE,
 	0x8000,		// RESET_PAGE,
-	0x800f,		// MODE_MANUAL_PAGE,
-	0x80f0,		// MODE_AUTO_PAGE,
-	0x07ff,		// BRIGHTNESS_SETTING,
+	0x200f,		// MODE_MANUAL_PAGE,
+	0x20f0,		// MODE_AUTO_PAGE,
+	0x03ff,		// BRIGHTNESS_SETTING,// mask
 	0xffff,		// MANUAL_MODE,
 	0xffff,		// AUTO_MODE,
 	FIRMWARE_V_Disp,// FIRMWARE_VER,
-	0x10FF		// RESET_CONFIRM
+	0x80FF		// RESET_CONFIRM
 };
 
 // Menu state variables
@@ -101,7 +101,7 @@ static uint16_t get_brightness_pattern(uint8_t brightness) {
 	// Create pattern based on brightness level (0-10)
 	// 0 = 0x0000, 1 = 0x0001, 2 = 0x0003, ..., 10 = 0x07FF
 	if (brightness == 0) return 0x0000;
-	return (1 << brightness) - 1;
+	return ((1 << brightness) - 1) & MENU_TO_PAGES[BRIGHTNESS_SETTING]; // mask the output
 }
 
 static void handle_main_menu(Menu_t * const me, const BTN_event_t event) {
@@ -133,8 +133,7 @@ static void handle_main_menu(Menu_t * const me, const BTN_event_t event) {
 						next_page = FIRMWARE_VER;
 						break;
 					case RESET_PAGE:
-						next_page = RESET;
-						break;
+						next_page = RESET_CONFIRM;
 					default:
 						break;
 				}
@@ -275,8 +274,8 @@ static void handle_auto_mode(Menu_t * const me, const BTN_event_t event) {
 	if (event.type == SINGLE_PRESS && event.id == BTN_1) {
 		// Exit Auto and return to mode select
 		menu_settings.is_auto_mode = false;
-		me->current_page = MODE_SELECT_PAGE;
-		me->pattern = MENU_TO_PAGES[MODE_SELECT_PAGE];
+		me->current_page = MODE_MANUAL_PAGE;
+		me->pattern = MENU_TO_PAGES[MODE_MANUAL_PAGE];
 		send_display_update(me, me->pattern, menu_settings.brightness);
 		log_message(tag, LOG_INFO, "Auto Mode: Exited");
 	}

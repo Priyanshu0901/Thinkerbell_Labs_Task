@@ -4,243 +4,221 @@
 [![IDE](https://img.shields.io/badge/IDE-STM32CubeIDE-orange)](https://www.st.com/en/development-tools/stm32cubeide.html)
 [![Language](https://img.shields.io/badge/Language-C-blue)](https://en.wikipedia.org/wiki/C_(programming_language))
 
-## Architecture
+A FreeRTOS-based firmware implementation for STM32F411 featuring multi-pattern button detection, hierarchical menu navigation, and 16-LED output control via shift register.
+
+## Overview
+
+This project implements a complete embedded user interface system controlled entirely through three physical buttons. The system features debounced multi-press detection (single, double, triple, and long press), a hierarchical menu structure, and real-time LED pattern display with adjustable brightness control.
+
+**Target Platform:** STM32F411CEU6  
+**RTOS:** FreeRTOS (CMSIS-RTOS v2) 
+
+## Hardware Requirements
+
+### Microcontroller
+- STM32F411CEU6 (Black Pill board)
+- System Clock: 100 MHz
+- HSE: 25 MHz crystal
+
+### Peripherals
+- 3x Push buttons (active-low with external pull-ups)
+- 2x SN74HC595 shift registers (cascaded for 16-bit output)
+- 16x LEDs with current limiting resistors
+- 1x User status LED
+- UART2 for debug logging (115200 baud)
+
+### Pin Assignments
+
+| Pin   | Function        | Description                    |
+|-------|-----------------|--------------------------------|
+| PB13  | BTN_1          | Button 1 input                 |
+| PB14  | BTN_2          | Button 2 input                 |
+| PB15  | BTN_3          | Button 3 input                 |
+| PA6   | SR_DATA        | Shift register serial data     |
+| PA7   | SR_CLK         | Shift register serial clock    |
+| PB0   | RCLK           | Shift register latch clock     |
+| PB1   | SR_CLR         | Shift register clear (active-low)|
+| PA5   | OE_PIN         | Output enable (PWM/TIM2_CH1)   |
+| PC13  | U_LED          | User status LED                |
+| PA2   | USART2_TX      | Debug UART transmit            |
+
+## System Architecture
+
+### Thread Structure
+
+**ButtonInput Thread** (Priority: Normal, Stack: 4KB)
+- Polls button GPIO every 5ms
+- Implements 30ms debounce filter
+- Detects press patterns using timestamp analysis
+- Queues button events for menu processing
+
+**MenuLogic Thread** (Priority: Normal, Stack: 4KB)
+- Receives button events from queue
+- Implements hierarchical state machine
+- Manages menu navigation and mode switching
+- Generates display update commands
+- Handles auto-mode pattern cycling (2-second interval)
+
+**DisplayManager Thread** (Priority: Normal, Stack: 4KB)
+- Receives display patterns from queue
+- Drives cascaded SN74HC595 shift registers
+- Controls brightness via PWM (0-10 levels, 480 Hz)
+- Protects hardware access with mutex
+
+### Inter-Task Communication
 
 ```
-Thread 1: Button Input       → Debounce & detect events
-Thread 2: Menu Logic         → Process input & manage state  
-Thread 3: Display Manager    → Drive shift register hardware
+ButtonInput --[button_event_queue]--> MenuLogic --[display_pattern_queue]--> DisplayManager
+                                                                                    |
+                                                                              [shiftreg_mutex]
+                                                                                    |
+                                                                              SN74HC595 Hardware
 ```
 
-**Communication**:
-- `button_event_queue`: Button events → Menu
-- `display_pattern_queue`: Display updates → Hardware
-- `shiftreg_mutex`: Thread-safe hardware access
+**Queues:**
+- button_event_queue: 16 elements of 12 bytes (button events)
+- display_pattern_queue: 16 elements of 4 bytes (display updates)
 
-## Project Structure
+**Mutexes:**
+- shiftreg_mutex: Protects shift register hardware access
 
-```
-├── Button.c/h              # Multi-press button driver with debouncing
-├── Menu.c/h                # Menu state machine and navigation logic
-├── Display.c/h             # Display manager abstraction layer
-├── SN74HC595.c/h           # Shift register driver (16-bit, PWM brightness)
-├── debug_logger.c/h        # UART logging with levels and colors
-├── freertos.c              # Task initialization and main loops
-└── main.c                  # Hardware initialization
-```
+## Button Detection
 
-## Hardware Connections
+### Press Types
 
-### Buttons (Active Low)
-| Button | GPIO | Function |
-|--------|------|----------|
-| BTN_1  | -    | Navigate / Cycle |
-| BTN_2  | -    | Select / Confirm |
-| BTN_3  | -    | Back / Cancel / Power |
+| Type          | Timing Requirement           | Detection Method                    |
+|---------------|------------------------------|-------------------------------------|
+| Single Press  | Press and release < 300ms    | One click, 300ms idle timeout       |
+| Double Press  | Two presses within 500ms     | Two clicks, 500ms window            |
+| Triple Press  | Three presses within 700ms   | Three clicks, immediate trigger     |
+| Long Press    | Hold > 1500ms                | Continuous press duration           |
 
-### SN74HC595 Shift Register
-| Pin | STM32 | Description |
-|-----|-------|-------------|
-| SER | PA6 | Serial Data |
-| SRCLK | PA7 | Serial Clock |
-| RCLK | PB0 | Latch Clock |
-| SRCLR | PB1 | Clear (Active Low) |
-| OE | TIM2_CH1 | PWM Brightness Control |
-
-**Configuration**: Two 74HC595 cascaded for 16 LEDs (B15-B0)
+### Debouncing
+- Software debounce: 30ms stability window
+- State change detection: Rising and falling edge tracking
+- Jitter rejection: Pin must remain stable for debounce period
 
 ## Menu Structure
 
 ```
 Main Menu
-├── Brightness (B15)
-│   └── Settings: 0-10 levels
-├── Mode (B14)
-│   ├── Manual: 16 selectable patterns
-│   └── Auto: Cycle patterns every 2s
-├── Info (B13)
-│   └── Firmware version display
-└── Reset (B12)
-    └── Factory reset (double-press confirm)
+├── Brightness              (LED: 0x1000)
+│   └── Brightness Setting  (LED: 0x03FF, adjustable 0-10)
+│
+├── Mode                    (LED: 0x2000)
+│   ├── Manual Selection    (LED: 0x200F)
+│   │   └── Manual Mode     (LED: Pattern, user cycles)
+│   └── Auto Selection      (LED: 0x20F0)
+│       └── Auto Mode       (LED: Pattern, auto-cycles 2s)
+│
+├── Info                    (LED: 0x4000)
+│   └── Firmware Version    (LED: 0x0A05, v10.5)
+│
+└── Reset                   (LED: 0x8000)
+    └── Reset Confirmation  (LED: 0x80FF, double-press to confirm)
 ```
 
-## Button Controls
+### Menu Navigation Controls
 
-### Main Menu
-- **BTN1 Single**: Next item
-- **BTN2 Single**: Enter item
-- **BTN3 Single**: Previous item
-- **BTN3 Long**: Power off
+**Main Menu:**
+- BTN1 Single: Move selection forward (circular)
+- BTN2 Single: Enter selected menu item
+- BTN3 Single: Move selection backward (circular)
+- BTN3 Long: Power off system
 
-### Brightness
-- **BTN2 Single**: Increase (+1)
-- **BTN3 Single**: Decrease (-1)
-- **BTN1 Single**: Return to menu
+**Brightness Setting:**
+- BTN2 Single: Increase brightness (max: 10)
+- BTN3 Single: Decrease brightness (min: 0)
+- BTN1 Single: Return to main menu
 
-### Mode Selection
-- **BTN1 Single**: Toggle Manual/Auto
-- **BTN2 Single**: Enter mode
-- **BTN3 Single**: Cancel
+**Mode Selection:**
+- BTN1 Single: Toggle between Manual and Auto
+- BTN2 Single: Enter selected mode
+- BTN3 Single: Cancel, return to main menu
 
-### Manual Mode
-- **BTN1 Single**: Next pattern
-- **BTN2 Single**: Save & exit
-- **BTN3 Single**: Cancel
+**Manual Mode:**
+- BTN1 Single: Cycle through 16 LED patterns
+- BTN2 Single: Save pattern, return to mode selection
+- BTN3 Single: Cancel without saving
 
-### Auto Mode
-- **BTN1 Single**: Exit auto mode
-- (Auto-cycles every 2 seconds)
+**Auto Mode:**
+- Automatic pattern cycling every 2 seconds
+- BTN1 Single: Exit to mode selection
 
-### Reset
-- **BTN2 Double**: Confirm reset
-- **BTN3 Single**: Cancel
+**Reset Confirmation:**
+- BTN2 Double: Confirm reset to defaults
+- BTN3 Single: Cancel, return to main menu
 
-### Power Off
-- **BTN1 Long**: Power on
+**Power Off State:**
+- All inputs ignored except BTN1 Long to restart
 
-## ⚙️ Default Settings
+### Default Settings
 
-- **Brightness**: 5 (medium)
-- **Mode**: Manual
-- **Pattern**: Pattern 0 (0x0001)
-
-## Configuration
-
-### Timer (TIM2)
-- **Frequency**: 1 kHz PWM
-- **Channel 1**: OE pin (brightness control)
-- **Prescaler**: 960-1 (@ 96 MHz)
-- **ARR**: 100-1
-
-### FreeRTOS
-- **Kernel**: CMSIS-RTOS v2
-- **Stack Size**: 4KB per task
-- **Priority**: Normal for all tasks
-- **Queues**: 16 messages each
-
-### UART Logging
-- **UART2**: 115200 baud
-- **Format**: `(timestamp) [LEVEL] TAG : message`
-- **Colors**: ANSI terminal colors
-
-## Getting Started
-
-### 1. Hardware Setup
-- Connect shift registers as per pinout
-- Configure TIM2 for PWM output
-- Connect UART2 for debug logging
-
-### 2. Build & Flash
-```bash
-# Using STM32CubeIDE
-1. Import project
-2. Build (Ctrl+B)
-3. Flash (F11)
-```
-
-### 3. Monitor Output
-```bash
-# Serial monitor (115200 baud)
-screen /dev/ttyUSB0 115200
-# or
-minicom -D /dev/ttyUSB0 -b 115200
-```
+| Parameter      | Default Value |
+|----------------|---------------|
+| Brightness     | 5 (medium)    |
+| Mode           | Manual        |
+| Pattern Index  | 0 (0x0001)    |
 
 ## LED Patterns
 
-| Page | Pattern | LEDs On |
-|------|---------|---------|
-| Brightness | `0x1000` | B12 |
-| Mode Select | `0x2000` | B13 |
-| Info | `0x4000` | B14 |
-| Reset | `0x8000` | B15 |
-| Brightness 5 | `0x001F` | B0-B4 |
-| Manual Mode | `0x800F` | B15, B0-B3 |
-| Auto Mode | `0x80F0` | B15, B4-B7 |
-| Firmware 10.5 | `0x0A05` | Version encoded |
+The system uses 16 predefined patterns for visual display:
 
-## 🧪 Testing
-
-### Without Physical Buttons
-Use debugger breakpoints and variable modification:
 ```c
-// In debugger, inject event:
-BTN_event_t test_event = {
-    .id = BTN_1,
-    .type = SINGLE_PRESS,
-    .timestamp = HAL_GetTick()
-};
-osMessageQueuePut(button_event_queueHandle, &test_event, 0, 0);
+Pattern 0:  0x0001  (1 LED)
+Pattern 1:  0x0003  (2 LEDs)
+Pattern 2:  0x0007  (3 LEDs)
+Pattern 3:  0x000F  (4 LEDs)
+Pattern 4:  0x001F  (5 LEDs)
+Pattern 5:  0x003F  (6 LEDs)
+Pattern 6:  0x007F  (7 LEDs)
+Pattern 7:  0x00FF  (8 LEDs)
+Pattern 8:  0x01FF  (9 LEDs)
+Pattern 9:  0x03FF  (10 LEDs)
+Pattern 10: 0x07FF  (11 LEDs)
+Pattern 11: 0x0FFF  (12 LEDs)
+Pattern 12: 0x1FFF  (13 LEDs)
+Pattern 13: 0x3FFF  (14 LEDs)
+Pattern 14: 0x7FFF  (15 LEDs)
+Pattern 15: 0xFFFF  (16 LEDs)
 ```
 
-### Display Test
-```c
-// Direct display update:
-Display_update_data_t test = {
-    .data = 0xFFFF,        // All LEDs
-    .brightness = 10       // Max brightness
-};
-Display_update(&DisplayManager, &test);
+## Brightness Control
+
+PWM-based brightness control using TIM2_CH1 on OE pin (active-low):
+
+```
+PWM Frequency: 500 Hz (flicker-free)
+Timer Configuration:
+  - Prescaler: 999 (50 MHz / 1000 = 50 kHz)
+  - ARR: 99 (50 kHz / 100 = 500 Hz)
+  - Duty Cycle: Inverted (0% = max brightness, 100% = off)
+
+Brightness Levels:
+  Level 0:  100% duty (LEDs off)
+  Level 5:   50% duty (medium)
+  Level 10:   0% duty (maximum brightness)
 ```
 
-## API Documentation
+## Project Structure (Important)
 
-### Button API
-- `Button_ctor()`: Initialize button
-- `Button_read()`: Poll button state (call every 5ms)
+```
+Core/
+├── Inc/
+│   ├── Button.h              Button driver interface
+│   ├── Display.h             Display manager interface
+│   ├── Menu.h                Menu state machine interface
+│   ├── SN74HC595.h           Shift register driver interface
+│   ├── debug_logger.h        UART logging utilities
+│   └── main.h                Pin definitions and includes
+│
+└── Src/
+    ├── Button.c              Button state machine and detection
+    ├── Display.c             Display manager implementation
+    ├── Menu.c                Menu logic and state transitions
+    ├── SN74HC595.c           Shift register bit-banging driver
+    ├── debug_logger.c        Colored UART logging with timestamps
+    ├── freertos.c            Task initialization and scheduling
+    └──  main.c                System initialization and main loop
 
-### Menu API
-- `Menu_ctor()`: Initialize menu system
-- `Menu_process_input()`: Handle button event
-- `Menu_is_auto_mode_active()`: Check auto mode
-- `Menu_auto_cycle_pattern()`: Trigger pattern cycle
-
-### Display API
-- `Display_update()`: Set pattern + brightness
-- `Display_set_pattern()`: Change pattern only
-- `Display_set_brightness()`: Change brightness only
-- `Display_enable/disable()`: Power management
-- `Display_clear()`: Turn off all LEDs
-
-### Shift Register API
-- `SN74HC595_write()`: Write 16-bit pattern
-- `SN74HC595_set_brightness()`: Set PWM duty cycle
-- `SN74HC595_update()`: Atomic update
-- `SN74HC595_clear()`: Hardware clear
-
-## Debugging
-
-### Enable Verbose Logging
-All modules use `debug_logger` with levels:
-- `LOG_DEBUG`: Detailed operation info
-- `LOG_INFO`: Normal operation events
-- `LOG_WARN`: Warnings and clamps
-- `LOG_ERROR`: Error conditions
-
-## SNx4HC595 Timing logic 
-
-|Pin|Pin Function|Remarks|
-|---|---|---|
-| OE | Output Enable | Using for brightness (Active Low)|
-| RCLK | Register Clock Input | RCLK Snap on 16th to update display |
-| SER | Serial Input| Data IN |
-| SRCLK | Serial Clock | Data CLK |
-| SRCLR | Not Used | Active Low - HIGH|
-
-## Menu to 16 LED Map
-
-| Func | B15 | B14 | B13 | B12 | B11 | B10 | B9 | B8 | B7 | B6 | B5 | B4 | B3 | B2 | B1 | B0 |
-| --- | --- | --- | --- | --- | --- | --- | -- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Brightness | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Mode Select| 0 | 0 | 1| 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Info | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Reset | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| Brightness Behavior (0)| 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
-| Brightness Behavior (10) | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-| Mode Manual| 0 | 0 | 1| 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 |
-| Mode Auto | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 0 | 0 | 0 | 0 |
-| MANUAL MODE BEHAVIOR (Pattern = x) | x | x | x | x | x | x | x | x | x | x | x | x | x | x | x | x |
-| AUTO MODE BEHAVIOR (Pattern = x cycle 2 seconds) | x | x | x | x | x | x | x | x | x | x | x | x | x | x | x | x |
-| Firmware version (M.m)| M8 | M7 | M6 | M5 | M4 | M3 | M2 | M1 | M0 | 0 | m5 | m4 | m3 | m2 | m1 | m0 |
-| Reset Screen | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 |
-
+```
